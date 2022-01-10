@@ -7,13 +7,22 @@ class Manager {
     this.self = this._newWindow({
       id: options.id ?? getId(),
       controlled: window.opener !== null,
+      data: {
+        parentId: null,
+        screenId: null,
+        state: document.visibilityState
+      },
+      info: {
+        controlled: window.opener !== null,
+        popup: !window.locationbar.visible
+      },
       ref: window
     });
 
     this.children = new Set();
+    this.screenDetails = null;
 
     this._childrenRefs = [];
-    this._update();
 
     document.title = this.self.id.toUpperCase();
   }
@@ -22,7 +31,6 @@ class Manager {
     let that = this;
 
     let win = {
-      parentId: null,
       ref: null,
       ...options,
       close: options.controlled
@@ -35,7 +43,10 @@ class Manager {
         }
         : null,
       get parent() {
-        return that.windows[win.parentId];
+        return that.windows[win.data.parentId];
+      },
+      get screen() {
+        return that.screenDetails?.screens[win.data.screenId];
       }
     };
 
@@ -43,6 +54,16 @@ class Manager {
     return win;
   }
 
+  // Notify other windows
+  _notify() {
+    this._channelSend({
+      type: 'update',
+      id: this.self.id,
+      data: this.self.data
+    });
+  }
+
+  // Notify the client
   _update() {
     requestAnimationFrame(() => {
       this._listener?.();
@@ -55,16 +76,16 @@ class Manager {
   }
 
   open(options = {}) {
-    let ref = window.open(location.href, '', '');
+    let ref = window.open(location.href, '', options.popup ? 'popup' : '');
     this._childrenRefs.push(ref);
   }
 
-  start() {
+  async start() {
     window.__info = this.self;
 
     if (window.opener) {
       let parent = this._newWindow(window.opener.__info);
-      this.self.parentId = parent.id;
+      this.self.data.parentId = parent.id;
     }
 
     this._channel.addEventListener('message', (event) => {
@@ -76,54 +97,58 @@ class Manager {
 
           if (window.parent === this.self) {
             this.children.add(window);
+
+            let index = this._childrenRefs.findIndex((ref) => ref.__info.id === window.id);
+
+            if (index >= 0) {
+              window.ref = this._childrenRefs[index];
+              this._childrenRefs.splice(index, 1);
+            }
           }
 
           this._channelSend({
             type: 'info',
-            windows: Object.values(this.windows).map((window) => ({
-              id: window.id,
-              controlled: window.controlled,
-              parentId: window.parent?.id ?? null
-            }))
+            window: {
+              id: this.self.id,
+              controlled: this.self.controlled,
+              data: this.self.data,
+              info: this.self.info
+            }
           });
 
           this._update();
 
           break;
         }
+
         case 'info': {
-          let update = false;
-
-          for (let window of message.windows) {
-            if (!(window.id in this.windows)) {
-              this._newWindow(window);
-              update = true;
-            }
-          }
-
-          if (update) {
+          if (!(message.window.id in this.windows)) {
+            this._newWindow(message.window);
             this._update();
           }
 
           break;
         }
+
         case 'close': {
           let closedWindow = this.windows[message.id];
-          delete this.windows[closedWindow.id];
 
-          for (let window of Object.values(this.windows)) {
-            if (window.parentId === closedWindow.id) {
-              window.parentId = null;
-            }
+          if (this.self.parent === closedWindow) {
+            this.self.data.parentId = null;
+            this._notify();
           }
+
+          delete this.windows[closedWindow.id];
 
           if (this.children.has(closedWindow)) {
             this.children.delete(closedWindow);
           }
 
           this._update();
+
           break;
         }
+
         case 'order-close': {
           if (message.id === this.self.id) {
             window.close();
@@ -131,24 +156,91 @@ class Manager {
 
           break;
         }
+
+        case 'update': {
+          this.windows[message.id].data = message.data;
+          this._update();
+
+          break;
+        }
       }
     });
 
+
+    let unloading = false;
+
     window.addEventListener('beforeunload', (event) => {
+      unloading = true;
+
       this._channelSend({
         type: 'close',
         id: this.self.id
       });
     });
 
+    await this.screenInit();
+
     this._channelSend({
       type: 'declare',
       window: {
         id: this.self.id,
         controlled: this.self.controlled,
-        parentId: this.parent?.id ?? null
+        data: this.self.data,
+        info: this.self.info
       }
     });
+
+
+
+
+
+    // Lifecycle API
+
+    document.addEventListener('visibilitychange', () => {
+      if (!unloading) {
+        this.self.data.state = document.visibilityState;
+        this._notify();
+      }
+    });
+
+
+    this._update();
+  }
+
+  async screenInit() {
+    this.screenGranted = false;
+    this.screenSupported = false;
+
+    let permission;
+
+    try {
+      permission = await navigator.permissions.query({ name: 'window-placement' });
+    } catch (err) {
+      return;
+    }
+
+    let update = async () => {
+      this.screenGranted = (permission.state === 'granted');
+      // console.log(this.screenSupported, this.screenGranted);
+
+      if (this.screenGranted) {
+        await this.screenAsk();
+      }
+    };
+
+    this.screenSupported = true;
+    await update();
+
+    permission.addEventListener('change', () => {
+      update();
+    });
+  }
+
+  async screenAsk() {
+    let details = await window.getScreenDetails();
+    this.screenDetails = details;
+
+    this.self.data.screenId = details.screens.indexOf(details.currentScreen);
   }
 
   _channelSend(message) {
@@ -168,7 +260,7 @@ async function main() {
   let manager = new Manager({
     namespace: 'foo',
     listener: () => {
-      console.log(manager.windows, manager.parent, manager.children);
+      console.log(manager.windows);
 
       let output = 'Windows:\n';
       output += Object.values(manager.windows)
@@ -179,6 +271,10 @@ async function main() {
           if (manager.self === window) out += ' [self]';
           if (manager.parent === window) out += ' [parent]';
           if (manager.children.has(window)) out += ' [child]';
+          if (window.info.popup) out += ' [popup]';
+
+          out += ` [state: ${window.data.state}]`;
+          out += ` [screen: ${window.data.screenId}]`;
 
           if (window.controlled) {
             out += ` <button type="button" data-id="${window.id}">Close</button>`;
@@ -205,10 +301,16 @@ async function main() {
     }
   });
 
-  manager.start();
+  window.manager = manager;
+
+  await manager.start();
 
   document.querySelector('button').addEventListener('click', () => {
     manager.open();
+  });
+
+  document.querySelector('button:nth-child(2)').addEventListener('click', () => {
+    manager.open({ popup: true });
   });
 }
 
