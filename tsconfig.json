@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "jsx": "react-jsx",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowJs": true,
+    "outDir": "lib",
+    "strict": true,
+    "declaration": true,
+    "skipLibCheck": true
+  },
+  "files": [
+    "src/index.ts"
+  ]
+}
