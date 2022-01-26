@@ -9,12 +9,10 @@ async function main() {
     info: { date: Date.now() }
   });
 
-  await manager.start();
-
   let ids = [];
 
   manager.onUpdate(() => {
-    console.log('Update');
+    // console.log('Update');
 
     let output = 'Nodes:\n';
     output += manager.nodeList
@@ -31,6 +29,7 @@ async function main() {
         let out = `  * Created: ${new Date(node.info.date)}`;
         out += `    <button type="button" data-index="${index}" ${node.controlled ? '' : 'disabled'}>Close</button>`;
         out += `\n    Timestamp: ${node.data.timestamp}`;
+        out += `\n    Screen: ${node.screen ? `${node.screen.label} (${node.screen.width} x ${node.screen.height})` : 'unknown'}`;
 
         out += '\n    ' + Object.entries({
           'Self': manager.self === node,
@@ -74,6 +73,8 @@ async function main() {
     }
   }, { initial: true });
 
+
+  await manager.start();
   window.manager = manager;
 
 
@@ -85,9 +86,14 @@ async function main() {
     manager.open({ popup: true });
   });
 
-  setInterval(() => {
-    manager.self.setData({ timestamp: manager.self.data.timestamp + 1 });
-  }, 1000);
+  document.querySelector('button:nth-child(3)').addEventListener('click', () => {
+    // manager.controlScreens();
+    window.getScreenDetails();
+  });
+
+  // setInterval(() => {
+  //   manager.self.setData({ timestamp: manager.self.data.timestamp + 1 });
+  // }, 1000);
 }
 
 main().catch((err) => {

@@ -4,12 +4,47 @@ import type { Nodes, NodeId, NodeIdInternal } from './node.js';
 import { Updatable } from './updatable.js';
 
 
+declare global {
+  interface Window {
+    getScreenDetails(): Promise<ScreenDetails>;
+  }
+
+  interface ScreenDetails {
+    currentScreen: ScreenDetailed;
+    screens: ScreenDetailed[];
+  }
+
+  interface ScreenDetailed extends Screen {
+    devicePixelRatio: number;
+    label: string;
+    left: number;
+    top: number;
+  }
+}
+
+
+interface Executor {
+  (promise: Promise<unknown>): void;
+}
+
+const DefaultExecutor: Executor = (promise: Promise<unknown>) => {
+  promise.catch((err) => {
+    console.error(err);
+  });
+}
+
+
+
+export type ScreenId = number;
+
 export const NodesInternalSymbol = Symbol();
 export const SendSymbol = Symbol();
 
 export class Manager<Data, Info> extends Updatable {
   #channel: BroadcastChannel;
+  #controlledScreens = false;
   #nodes: Record<NodeIdInternal, Node<Data, Info>> = {};
+  _screenDetails: ScreenDetails | null = null;
 
   readonly nodes: Record<NodeId, Node<Data, Info>> = {};
   readonly self: Node<Data, Info>;
@@ -77,7 +112,7 @@ export class Manager<Data, Info> extends Updatable {
   }
 
 
-  start(options?: { signal?: AbortSignal; }) {
+  async start(options?: { signal?: AbortSignal; }) {
     this.#channel.addEventListener('message', (event) => {
       let message = JSON.parse(event.data) as Message<Data, Info>;
 
@@ -119,7 +154,9 @@ export class Manager<Data, Info> extends Updatable {
           let node = this.#nodes[message.id];
 
           if (this.self.parent === node) {
-            this.self[SetDataSymbol]({ parentId: null });
+            this.self._data.parentId = null;
+            this.self._update();
+            this._update();
           }
 
           this.#removeNode(node);
@@ -146,7 +183,8 @@ export class Manager<Data, Info> extends Updatable {
         case 'update': {
           let node = this.#nodes[message.id];
 
-          node[SetDataSymbol](message.data);
+          node._data = message.data;
+          node._update();
           this._update();
 
           break;
@@ -175,8 +213,8 @@ export class Manager<Data, Info> extends Updatable {
 
     // Observe visibility changes of this window.
     document.addEventListener('visibilitychange', () => {
-      this.self[SetDataSymbol]({ visible: (document.visibilityState === 'visible') }, { update: true });
-      this._update();
+      this.self._data.visible = (document.visibilityState === 'visible');
+      this.self._updateAndBroadcast();
 
       // if (!unloading) {
       // }
@@ -185,13 +223,13 @@ export class Manager<Data, Info> extends Updatable {
 
     // Observe focus changes of this window.
     window.addEventListener('focus', () => {
-      this.self[SetDataSymbol]({ focused: true }, { update: true });
-      this._update();
+      this.self._data.focused = true;
+      this.self._updateAndBroadcast();
     }, { signal: controller.signal });
 
     window.addEventListener('blur', () => {
-      this.self[SetDataSymbol]({ focused: false }, { update: true });
-      this._update();
+      this.self._data.focused = false;
+      this.self._updateAndBroadcast();
     }, { signal: controller.signal });
 
 
@@ -200,10 +238,51 @@ export class Manager<Data, Info> extends Updatable {
       type: 'declare',
       node: this.self.serialize()
     });
+
+
+    // Query the Screen Control API
+    await this.controlScreens();
   }
 
   open(options?: { popup: boolean; }) {
     let ref = window.open(location.href, '', options?.popup ? 'popup' : '');
     // this._childrenRefs.push(ref);
+  }
+
+
+  async controlScreens(options?: { executor?: Executor; signal?: AbortSignal; }) {
+    this.#controlledScreens = false;
+
+    let permission!: PermissionStatus;
+
+    try {
+      permission = await navigator.permissions.query({ name: 'window-placement' as PermissionName });
+    } catch (err) {
+      // Not supported
+      return;
+    }
+
+
+    let updateCurrentScreen = () => {
+      this.self._data.screenId = this._screenDetails
+        && this._screenDetails.screens.indexOf(this._screenDetails.currentScreen);
+      this.self._updateAndBroadcast();
+    };
+
+    let update = async () => {
+      if (permission.state === 'granted') {
+        this._screenDetails = await window.getScreenDetails();
+        updateCurrentScreen();
+      } else {
+        this._screenDetails = null;
+        updateCurrentScreen();
+      }
+    };
+
+    await update();
+
+    permission.addEventListener('change', () => {
+      (options?.executor ?? DefaultExecutor)(update());
+    }, { signal: options?.signal });
   }
 }

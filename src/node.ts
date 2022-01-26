@@ -1,5 +1,5 @@
 import { NodesInternalSymbol, SendSymbol } from './manager.js';
-import type { Manager } from './manager.js';
+import type { Manager, ScreenId } from './manager.js';
 import type { SerializedNode } from './message.js';
 import { Updatable } from './updatable.js';
 
@@ -18,9 +18,9 @@ export class Node<Data, Info> extends Updatable {
   #manager: Manager<Data, Info>;
 
   // data: changes
-  #data: {
+  _data: {
     parentId: NodeIdInternal | null;
-    screenId: NodeIdInternal | null;
+    screenId: ScreenId | null;
 
     focused: boolean;
     visible: boolean;
@@ -42,7 +42,7 @@ export class Node<Data, Info> extends Updatable {
     id: NodeIdInternal;
     data: {
       parentId: NodeIdInternal | null;
-      screenId: NodeIdInternal | null;
+      screenId: ScreenId | null;
 
       focused: boolean;
       visible: boolean;
@@ -58,7 +58,7 @@ export class Node<Data, Info> extends Updatable {
   }) {
     super();
 
-    this.#data = options.data;
+    this._data = options.data;
     this.#id = options.id;
     this.#info = options.info;
     this.#manager = manager;
@@ -67,17 +67,23 @@ export class Node<Data, Info> extends Updatable {
     this.window = options.window;
   }
 
-  get data(): Data { return this.#data.user; }
+  get data(): Data { return this._data.user; }
   get controlled(): boolean { return this.#info.controlled; }
   get popup(): boolean { return this.#info.popup };
 
   get info(): Info { return this.#info.user; }
-  get focused(): boolean { return this.#data.focused; }
-  get visible(): boolean { return this.#data.visible; }
+  get focused(): boolean { return this._data.focused; }
+  get visible(): boolean { return this._data.visible; }
+
+  get screen(): ScreenDetailed | null {
+    return this.#manager._screenDetails && this._data.screenId !== null
+      ? this.#manager._screenDetails.screens[this._data.screenId]
+      : null;
+  }
 
   get parent(): Node<Data, Info> | null {
-    return this.#data.parentId
-      ? this.#manager[NodesInternalSymbol][this.#data.parentId]
+    return this._data.parentId
+      ? this.#manager[NodesInternalSymbol][this._data.parentId]
       : null;
   }
 
@@ -87,23 +93,6 @@ export class Node<Data, Info> extends Updatable {
         node.parent === this
       )
     );
-  }
-
-  get [NodeIdInternalSymbol](): NodeIdInternal {
-    return this.#id;
-  }
-
-  [SetDataSymbol](data: Partial<SerializedNode<Data, never>['data']>, options?: { update?: boolean; }) {
-    Object.assign(this.#data, data);
-    this._update();
-
-    if (options?.update) {
-      this.#manager[SendSymbol]({
-        type: 'update',
-        id: this.#id,
-        data: this.#data
-      });
-    }
   }
 
 
@@ -119,18 +108,36 @@ export class Node<Data, Info> extends Updatable {
   }
 
   setData(data: Partial<Data>) {
-    this[SetDataSymbol]({ user: { ...this.#data.user, ...data } }, { update: true });
+    Object.assign(this._data.user, data);
+    this._updateAndBroadcast();
   }
 
   serialize(): SerializedNode<Data, Info> {
     return {
       id: this.#id,
-      data: this.#data,
+      data: this._data,
       info: this.#info
     };
   }
 
-  // start(options?: { signal: AbortSignal }) { }
+
+  _broadcast() {
+    this.#manager[SendSymbol]({
+      type: 'update',
+      id: this.#id,
+      data: this._data
+    });
+  }
+
+  _updateAndBroadcast() {
+    this._update();
+    this._broadcast();
+    this.#manager._update();
+  }
+
+  get [NodeIdInternalSymbol](): NodeIdInternal {
+    return this.#id;
+  }
 
 
   static fromRef<Data, Info>(

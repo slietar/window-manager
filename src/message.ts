@@ -1,3 +1,4 @@
+import type { ScreenId } from './manager.js';
 import type { NodeIdInternal } from './node.js';
 
 
@@ -17,13 +18,18 @@ export type Message<Data, Info> = {
 } | {
   type: 'order-close';
   id: NodeIdInternal;
+} | {
+  type: 'run';
+  id: NodeIdInternal;
+  name: string;
+  args: unknown[];
 };
 
 export interface SerializedNode<Data, Info> {
   id: NodeIdInternal;
   data: {
     parentId: NodeIdInternal | null;
-    screenId: NodeIdInternal | null;
+    screenId: ScreenId | null;
 
     focused: boolean;
     visible: boolean;
