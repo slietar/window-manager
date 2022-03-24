@@ -23,12 +23,20 @@ let manager = new Manager({
   info: { title: document.title },
 
   // 'data' denotes variable information of this node
-  data: {}
+  data: {},
+
+  methods: {
+    alert(message) {
+      window.alert(message);
+    }
+  }
 });
 
 // Advertise this node and query the screen control API
 manager.start();
 
+// Call methods
+manager.methods.alert('Hello');
 
 // Reference to nodes (i.e. other tabs)
 manager.self
@@ -46,6 +54,7 @@ node.focused
 node.screen
 node.visible
 node.parent
+node.fullscreen
 
 // Other
 node.children

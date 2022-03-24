@@ -32,6 +32,7 @@ export interface SerializedNode<Data, Info> {
     screenId: ScreenId | null;
 
     focused: boolean;
+    fullscreen: boolean;
     visible: boolean;
 
     user: Data;

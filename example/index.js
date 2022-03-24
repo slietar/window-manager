@@ -9,8 +9,6 @@ async function main() {
     info: { date: Date.now() }
   });
 
-  let ids = [];
-
   manager.onUpdate(() => {
     // console.log('Update');
 
@@ -18,24 +16,22 @@ async function main() {
     output += manager.nodes
       .sort((a, b) => a.info.date - b.info.date)
       .map((node) => {
-        let index = ids.indexOf(node.id);
-
-        if (index < 0) {
-          index = ids.length;
-          ids.push(node.id);
-        }
-
         let out = `  <b>* Node ${node.id.toUpperCase()}</b>`;
         out += `\n    Created: ${new Date(node.info.date)}`;
-        out += `    <button type="button" data-index="${index}" ${node.controlled ? '' : 'disabled'}>Close</button>`;
-        out += `\n    Age: ${node.data.age}`;
-        out += `\n    Screen: ${node.screen ? `${node.screen.label} (${node.screen.width} x ${node.screen.height})` : 'unknown'}`;
+        out += `    <button type="button" data-id="${node.id}" ${node.controlled ? '' : 'disabled'} data-role="close">Close</button>`;
+        out += ` <button type="button" data-id="${node.id}" ${node.controlled && node.popup ? '' : 'disabled'} data-role="wholescreen">Whole screen</button>`;
+        // out += `\n    Age: ${node.data.age}`;
+
+        if (node.screen) {
+          out += `\n    Screen: <select data-id="${node.id}" ${node.controlled && node.popup ? '' : 'disabled'}>${manager.screenDetails.screens.map((screen, screenIndex) => `<option ${screen === node.screen ? 'selected' : ''} value="${screenIndex}">${screen.label} (${screen.width} x ${screen.height})</option>`).join('')}</select>`;
+        }
 
         out += '\n    ' + Object.entries({
           'Self': manager.self === node,
           'Popup': node.popup,
           'Controlled': node.controlled,
           'Focused': node.focused,
+          'Fullscreen': node.fullscreen,
           'Visible': node.visible
         })
           .map(([key, value]) => `[${value ? 'x' : ' '}] ${key}`)
@@ -55,13 +51,26 @@ async function main() {
 
     controller = new AbortController();
 
-    for (let el of document.querySelectorAll('button[data-index]')) {
-      let index = el.dataset.index;
-
+    for (let el of document.querySelectorAll('button[data-id][data-role="close"]')) {
       el.addEventListener('click', () => {
-        let id = ids[index];
-        let node = manager.nodes[id];
+        let node = manager.nodesById[el.dataset.id];
         node.close();
+      }, { signal: controller.signal });
+    }
+
+    for (let el of document.querySelectorAll('button[data-id][data-role="wholescreen"]')) {
+      el.addEventListener('click', () => {
+        let node = manager.nodesById[el.dataset.id];
+        node.resizeTo(node.screen.width, node.screen.height);
+      }, { signal: controller.signal });
+    }
+
+    for (let el of document.querySelectorAll('select[data-id]')) {
+      el.addEventListener('change', () => {
+        let node = manager.nodesById[el.dataset.id];
+        let screen = manager.screenDetails.screens[el.value];
+
+        node.moveToScreen(screen, 0, 0);
       }, { signal: controller.signal });
     }
   }, { initial: true });
@@ -80,13 +89,16 @@ async function main() {
   });
 
   document.querySelector('button:nth-child(3)').addEventListener('click', () => {
-    // manager.controlScreens();
     window.getScreenDetails();
   });
 
-  setInterval(() => {
-    manager.self.setData({ age: manager.self.data.age + 1 });
-  }, 1000);
+  document.querySelector('button:nth-child(4)').addEventListener('click', () => {
+    document.body.requestFullscreen();
+  });
+
+  // setInterval(() => {
+  //   manager.self.setData({ age: manager.self.data.age + 5 });
+  // }, 5000);
 }
 
 main().catch((err) => {

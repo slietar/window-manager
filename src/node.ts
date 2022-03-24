@@ -20,6 +20,7 @@ export class Node<Data, Info, Methods extends MethodsBase> extends Updatable {
     screenId: ScreenId | null;
 
     focused: boolean;
+    fullscreen: boolean;
     visible: boolean;
 
     user: Data;
@@ -43,6 +44,7 @@ export class Node<Data, Info, Methods extends MethodsBase> extends Updatable {
       screenId: ScreenId | null;
 
       focused: boolean;
+      fullscreen: boolean;
       visible: boolean;
 
       user: Data;
@@ -87,6 +89,7 @@ export class Node<Data, Info, Methods extends MethodsBase> extends Updatable {
 
   get info(): Info { return this._info.user; }
   get focused(): boolean { return this._data.focused; }
+  get fullscreen(): boolean { return this._data.fullscreen; }
   get visible(): boolean { return this._data.visible; }
 
   get screen(): ScreenDetailed | null {
@@ -119,6 +122,26 @@ export class Node<Data, Info, Methods extends MethodsBase> extends Updatable {
         id: this.id
       });
     }
+  }
+
+  focus() {
+    this.methods._focus();
+  }
+
+  moveTo(x: number, y: number) {
+    this.methods._moveTo(x, y);
+  }
+
+  moveToScreen(screen: ScreenDetailed, x: number, y: number) {
+    this.moveTo(x + screen.left, y + screen.top);
+  }
+
+  requestFullscreen(options?: FullscreenOptions) {
+    this.methods._requestFullscreen(options ?? {});
+  }
+
+  resizeTo(width: number, height: number) {
+    this.methods._resizeTo(width, height);
   }
 
   setData(data: Partial<Data>) {
@@ -166,6 +189,7 @@ export class Node<Data, Info, Methods extends MethodsBase> extends Updatable {
         screenId: null,
 
         focused: document.hasFocus(),
+        fullscreen: document.fullscreenElement !== null,
         visible: (document.visibilityState === 'visible'),
 
         user: options.data

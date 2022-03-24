@@ -17,12 +17,19 @@ const DefaultExecutor: Executor = (promise: Promise<unknown>) => {
 }
 
 
-export type MethodsBase = Record<string, (...args: any) => void>;
+export interface MethodsBuiltin {
+  _focus(): void;
+  _moveTo(x: number, y: number): void;
+  _requestFullscreen(options: FullscreenOptions): void;
+  _resizeTo(width: number, height: number): void;
+}
+
+export type MethodsBase = Record<string, (...args: any[]) => void>;
 export type ScreenId = number;
 
-export class Manager<Data, Info, Methods extends MethodsBase = {}> extends Updatable {
+export class Manager<Data, Info, Methods extends MethodsBase> extends Updatable {
   _channel: BroadcastChannel;
-  _methods: Methods;
+  _methods: Methods & MethodsBuiltin;
   _nodes: Nodes<Data, Info, Methods> = {};
   screenDetails: ScreenDetails | null = null;
 
@@ -39,7 +46,21 @@ export class Manager<Data, Info, Methods extends MethodsBase = {}> extends Updat
     super();
 
     this._channel = new BroadcastChannel(options?.channelName ?? 'window-control');
-    this._methods = options?.methods ?? ({} as unknown as Methods);
+    this._methods = {
+      ...options?.methods,
+      _focus() {
+        window.focus();
+      },
+      _moveTo(x: number, y: number) {
+        window.moveTo(x, y);
+      },
+      _requestFullscreen(options: FullscreenOptions) {
+        document.body.requestFullscreen(options);
+      },
+      _resizeTo(width: number, height: number) {
+        window.resizeTo(width, height);
+      }
+    } as unknown as (Methods & MethodsBuiltin);
 
     this.self = Node.fromRef(this, document, window, {
       data: options?.data ?? ({} as Data),
@@ -82,13 +103,13 @@ export class Manager<Data, Info, Methods extends MethodsBase = {}> extends Updat
 
 
   _send(message: Message<Data, Info>) {
-    this._channel.postMessage(JSON.stringify(message));
+    this._channel.postMessage(message);
   }
 
 
   async start(options?: { signal?: AbortSignal; }) {
     this._channel.addEventListener('message', (event) => {
-      let message = JSON.parse(event.data) as Message<Data, Info>;
+      let message = event.data as Message<Data, Info>;
 
       switch (message.type) {
         // A new node declares itself.
@@ -204,6 +225,11 @@ export class Manager<Data, Info, Methods extends MethodsBase = {}> extends Updat
       this.self._updateAndBroadcast();
     }, { signal: controller.signal });
 
+    // Observe fullscreen changes for this window.
+    document.addEventListener('fullscreenchange', () => {
+      this.self._data.fullscreen = (document.fullscreenElement !== null);
+      this.self._updateAndBroadcast();
+    }, { signal: controller.signal });
 
     // Notify existing nodes of this new node.
     this._send({
