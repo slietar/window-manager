@@ -1,26 +1,9 @@
+/// <reference path="api.d.ts" />
+
 import { Node } from './node.js';
 import { Message } from './message.js';
 import type { Nodes, NodeId } from './node.js';
 import { Updatable } from './updatable.js';
-
-
-declare global {
-  interface Window {
-    getScreenDetails(): Promise<ScreenDetails>;
-  }
-
-  interface ScreenDetails {
-    currentScreen: ScreenDetailed;
-    screens: ScreenDetailed[];
-  }
-
-  interface ScreenDetailed extends Screen {
-    devicePixelRatio: number;
-    label: string;
-    left: number;
-    top: number;
-  }
-}
 
 
 interface Executor {
@@ -32,7 +15,6 @@ const DefaultExecutor: Executor = (promise: Promise<unknown>) => {
     console.error(err);
   });
 }
-
 
 
 export type ScreenId = number;
@@ -107,15 +89,6 @@ export class Manager<Data, Info> extends Updatable {
         case 'declare': {
           let node = Node.fromSerialized(this, message.node);
           this._addNode(node);
-
-          // if (node.parent === this.self) {
-          //   let index = this._childrenRefs.findIndex((ref) => ref.__info.id === window.id);
-
-          //   if (index >= 0) {
-          //     window.ref = this._childrenRefs[index];
-          //     this._childrenRefs.splice(index, 1);
-          //   }
-          // }
 
           this._send({
             type: 'info',
