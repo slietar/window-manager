@@ -6,15 +6,8 @@ import { Updatable } from './updatable.js';
 export type NodeId = string;
 export type Nodes<Data, Info, Methods extends MethodsBase> = Record<NodeId, Node<Data, Info, Methods>>;
 
-export const NodeIdInternalSymbol = Symbol();
-export const SetDataSymbol = Symbol();
-
-
-// export class Node<Info extends Object = {}, Data extends object = {}> {
 export class Node<Data, Info, Methods extends MethodsBase> extends Updatable {
   _manager: Manager<Data, Info, Methods>;
-
-  // data: changes
   _data: {
     parentId: NodeId | null;
     screenId: ScreenId | null;
@@ -25,8 +18,6 @@ export class Node<Data, Info, Methods extends MethodsBase> extends Updatable {
 
     user: Data;
   };
-
-  // info: doesn't change
   _info: {
     controlled: boolean;
     popup: boolean;
@@ -212,6 +203,7 @@ export class Node<Data, Info, Methods extends MethodsBase> extends Updatable {
     });
   }
 }
+
 
 function createId(): NodeId {
   return (Math.random() + 1).toString(36).substring(7);

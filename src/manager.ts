@@ -1,5 +1,3 @@
-/// <reference path="api.d.ts" />
-
 import { Node } from './node.js';
 import { Message } from './message.js';
 import type { Nodes, NodeId } from './node.js';
