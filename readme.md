@@ -1,14 +1,71 @@
-# Window manager
+# window-manager
+
+**window-manager** is a package for managing tabs, windows and screens.
+
+Features:
+
+- Share constant or variable information with other tabs
+- Get status information on other tabs
+- Handle screens with the Screen Management API (when supported)
+- Create locks
+
+Communication is achieved using `BroadcastChannel`.
+
+
+## Usage
 
 ```js
-let manager = new WindowManager();
-manager.start(() => {
-  // Called on every update
+import { Manager } from 'window-manager';
 
-  console.log(this.windows);
 
-  window.controlled
-  window.state
-  window.close();
+let manager = new Manager({
+  // 'info' denotes constant information of this node
+  info: { title: document.title },
+
+  // 'data' denotes variable information of this node
+  data: {}
 });
+
+// Advertise this node and query the screen control API
+manager.start();
+
+
+// Reference to nodes (i.e. other tabs)
+manager.self
+manager.nodes
+manager.orphanNodes
+
+// Constant information
+node.info
+node.controlled
+node.popup
+
+// Variable information
+node.data
+node.focused
+node.screen
+node.visible
+node.parent
+
+// Other
+node.children
+
+// Listen for changes
+manager.onUpdate(() => {
+  // Called when a node is added, removed, or its data changes
+});
+
+node.onUpdate(() => {
+  // Called when the node's data changes
+});
+
+// Create changes
+node.setData({
+  // Shallow merge
+});
+
+node.close();
+
+// Control screens (only works when called after user interaction)
+await manager.controlScreens();
 ```
