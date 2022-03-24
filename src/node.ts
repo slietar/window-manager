@@ -1,18 +1,18 @@
-import type { Manager, ScreenId } from './manager.js';
+import type { Manager, MethodsBase, ScreenId } from './manager.js';
 import type { SerializedNode } from './message.js';
 import { Updatable } from './updatable.js';
 
 
 export type NodeId = string;
-export type Nodes<Data, Info> = Record<NodeId, Node<Data, Info>>;
+export type Nodes<Data, Info, Methods extends MethodsBase> = Record<NodeId, Node<Data, Info, Methods>>;
 
 export const NodeIdInternalSymbol = Symbol();
 export const SetDataSymbol = Symbol();
 
 
 // export class Node<Info extends Object = {}, Data extends object = {}> {
-export class Node<Data, Info> extends Updatable {
-  _manager: Manager<Data, Info>;
+export class Node<Data, Info, Methods extends MethodsBase> extends Updatable {
+  _manager: Manager<Data, Info, Methods>;
 
   // data: changes
   _data: {
@@ -33,9 +33,10 @@ export class Node<Data, Info> extends Updatable {
   };
 
   readonly id: NodeId;
+  readonly methods: Methods;
   readonly window: Window | null;
 
-  private constructor(manager: Manager<Data, Info>, options: {
+  private constructor(manager: Manager<Data, Info, Methods>, options: {
     id: NodeId;
     data: {
       parentId: NodeId | null;
@@ -61,6 +62,23 @@ export class Node<Data, Info> extends Updatable {
 
     this.id = options.id;
     this.window = options.window;
+
+    this.methods = Object.fromEntries(
+      Object.entries(manager._methods).map(([name, method]) => {
+        return [name, (...args: any[]) => {
+          if (this === manager.self) {
+            method.call(this, ...args);
+          } else {
+            this._manager._send({
+              type: 'method',
+              id: this.id,
+              name,
+              args
+            });
+          }
+        }];
+      })
+    ) as Methods;
   }
 
   get data(): Data { return this._data.user; }
@@ -72,18 +90,18 @@ export class Node<Data, Info> extends Updatable {
   get visible(): boolean { return this._data.visible; }
 
   get screen(): ScreenDetailed | null {
-    return this._manager._screenDetails && this._data.screenId !== null
-      ? this._manager._screenDetails.screens[this._data.screenId]
+    return this._manager.screenDetails && this._data.screenId !== null
+      ? this._manager.screenDetails.screens[this._data.screenId]
       : null;
   }
 
-  get parent(): Node<Data, Info> | null {
+  get parent(): Node<Data, Info, Methods> | null {
     return this._data.parentId
       ? this._manager._nodes[this._data.parentId]
       : null;
   }
 
-  get children(): Record<NodeId, Node<Data, Info>> {
+  get children(): Record<NodeId, Node<Data, Info, Methods>> {
     return Object.fromEntries(
       Object.entries(this._manager.nodes).filter(([_id, node]) =>
         node.parent === this
@@ -132,15 +150,15 @@ export class Node<Data, Info> extends Updatable {
   }
 
 
-  static fromRef<Data, Info>(
-    manager: Manager<Data, Info>,
+  static fromRef<Data, Info, Methods extends MethodsBase>(
+    manager: Manager<Data, Info, Methods>,
     document: Document,
     window: Window,
     options: {
       data: Data;
       info: Info;
     }
-  ): Node<Data, Info> {
+  ): Node<Data, Info, Methods> {
     let node = new Node(manager, {
       id: createId(),
       data: {
@@ -163,7 +181,7 @@ export class Node<Data, Info> extends Updatable {
     return node;
   }
 
-  static fromSerialized<Data, Info>(manager: Manager<Data, Info>, node: SerializedNode<Data, Info>): Node<Data, Info> {
+  static fromSerialized<Data, Info, Methods extends MethodsBase>(manager: Manager<Data, Info, Methods>, node: SerializedNode<Data, Info>): Node<Data, Info, Methods> {
     return new Node(manager, {
       ...node,
       window: null

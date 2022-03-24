@@ -17,23 +17,29 @@ const DefaultExecutor: Executor = (promise: Promise<unknown>) => {
 }
 
 
+export type MethodsBase = Record<string, (...args: any) => void>;
 export type ScreenId = number;
 
-export class Manager<Data, Info> extends Updatable {
+export class Manager<Data, Info, Methods extends MethodsBase = {}> extends Updatable {
   _channel: BroadcastChannel;
-  #controlledScreens = false;
-  _nodes: Nodes<Data, Info> = {};
-  _screenDetails: ScreenDetails | null = null;
+  _methods: Methods;
+  _nodes: Nodes<Data, Info, Methods> = {};
+  screenDetails: ScreenDetails | null = null;
 
-  readonly self: Node<Data, Info>;
+  readonly self: Node<Data, Info, Methods>;
 
   constructor(options?: {
     channelName?: string;
 
     data?: Data;
     info?: Info;
+
+    methods?: Methods;
   }) {
     super();
+
+    this._channel = new BroadcastChannel(options?.channelName ?? 'window-control');
+    this._methods = options?.methods ?? ({} as unknown as Methods);
 
     this.self = Node.fromRef(this, document, window, {
       data: options?.data ?? ({} as Data),
@@ -41,17 +47,17 @@ export class Manager<Data, Info> extends Updatable {
     });
 
     this._addNode(this.self);
-
-    // this.#idMap[this.self[NodeIdSymbol]] = this.self.id;
-
-    this._channel = new BroadcastChannel(options?.channelName ?? 'window-control');
   }
 
-  get nodes(): Array<Node<Data, Info>> {
+  get nodes(): Array<Node<Data, Info, Methods>> {
     return Object.values(this._nodes);
   }
 
-  get orphanNodes(): Nodes<Data, Info> {
+  get nodesById(): Nodes<Data, Info, Methods> {
+    return this._nodes;
+  }
+
+  get orphanNodes(): Nodes<Data, Info, Methods> {
     return Object.fromEntries(
       Object.entries(this._nodes).filter(([_id, node]) => node.parent === null)
     );
@@ -60,11 +66,11 @@ export class Manager<Data, Info> extends Updatable {
 
   // Frozen
 
-  private _addNode(node: Node<Data, Info>) {
+  private _addNode(node: Node<Data, Info, Methods>) {
     this._nodes[node.id] = node;
   }
 
-  private _removeNode(nodeArg: Node<Data, Info> | NodeId) {
+  private _removeNode(nodeArg: Node<Data, Info, Methods> | NodeId) {
     let node = typeof nodeArg === 'object'
       ? nodeArg
       : this._nodes[nodeArg];
@@ -148,6 +154,17 @@ export class Manager<Data, Info> extends Updatable {
 
           break;
         }
+
+        // A method is triggered.
+        case 'method': {
+          let node = this._nodes[message.id];
+
+          if (node === this.self) {
+            this._methods[message.name].call(node, ...message.args);
+          }
+
+          break;
+        }
       }
     }, { signal: options?.signal });
 
@@ -206,8 +223,6 @@ export class Manager<Data, Info> extends Updatable {
 
 
   async controlScreens(options?: { executor?: Executor; signal?: AbortSignal; }) {
-    this.#controlledScreens = false;
-
     let permission!: PermissionStatus;
 
     try {
@@ -219,28 +234,28 @@ export class Manager<Data, Info> extends Updatable {
 
 
     let updateCurrentScreen = () => {
-      this.self._data.screenId = this._screenDetails
-        && this._screenDetails.screens.indexOf(this._screenDetails.currentScreen);
+      this.self._data.screenId = this.screenDetails
+        && this.screenDetails.screens.indexOf(this.screenDetails.currentScreen);
       this.self._updateAndBroadcast();
     };
 
     let update = async () => {
       if (permission.state === 'granted') {
-        if (!this._screenDetails) {
-          this._screenDetails = await window.getScreenDetails();
+        if (!this.screenDetails) {
+          this.screenDetails = await window.getScreenDetails();
 
-          this._screenDetails.addEventListener('screenschange', () => {
+          this.screenDetails.addEventListener('screenschange', () => {
             updateCurrentScreen();
           });
 
-          this._screenDetails.addEventListener('currentscreenchange', () => {
+          this.screenDetails.addEventListener('currentscreenchange', () => {
             updateCurrentScreen();
           });
 
           updateCurrentScreen();
         }
       } else {
-        this._screenDetails = null;
+        this.screenDetails = null;
         updateCurrentScreen();
       }
     };

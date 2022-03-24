@@ -19,7 +19,7 @@ export type Message<Data, Info> = {
   type: 'order-close';
   id: NodeId;
 } | {
-  type: 'run';
+  type: 'method';
   id: NodeId;
   name: string;
   args: unknown[];
