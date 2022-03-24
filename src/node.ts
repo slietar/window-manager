@@ -67,6 +67,8 @@ export class Node<Data, Info> extends Updatable {
     this.window = options.window;
   }
 
+  get stringId(): string { return this.#id; }
+
   get data(): Data { return this._data.user; }
   get controlled(): boolean { return this.#info.controlled; }
   get popup(): boolean { return this.#info.popup };

@@ -271,8 +271,19 @@ export class Manager<Data, Info> extends Updatable {
 
     let update = async () => {
       if (permission.state === 'granted') {
-        this._screenDetails = await window.getScreenDetails();
-        updateCurrentScreen();
+        if (!this._screenDetails) {
+          this._screenDetails = await window.getScreenDetails();
+
+          this._screenDetails.addEventListener('screenschange', () => {
+            updateCurrentScreen();
+          });
+
+          this._screenDetails.addEventListener('currentscreenchange', () => {
+            updateCurrentScreen();
+          });
+
+          updateCurrentScreen();
+        }
       } else {
         this._screenDetails = null;
         updateCurrentScreen();
