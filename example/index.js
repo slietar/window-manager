@@ -1,11 +1,11 @@
-import { Manager } from './lib/index.js';
+import { Manager } from '../lib/index.js';
 
 
 async function main() {
   let controller = null;
 
   let manager = new Manager({
-    data: { timestamp: 0 },
+    data: { age: 0 },
     info: { date: Date.now() }
   });
 
@@ -15,8 +15,7 @@ async function main() {
     // console.log('Update');
 
     let output = 'Nodes:\n';
-    output += manager.nodeList
-      // .sort((a, b) => a.id.localeCompare(b.id))
+    output += manager.nodes
       .sort((a, b) => a.info.date - b.info.date)
       .map((node) => {
         let index = ids.indexOf(node.id);
@@ -26,9 +25,10 @@ async function main() {
           ids.push(node.id);
         }
 
-        let out = `  * Created: ${new Date(node.info.date)}`;
+        let out = `  <b>* Node ${node.id.toUpperCase()}</b>`;
+        out += `\n    Created: ${new Date(node.info.date)}`;
         out += `    <button type="button" data-index="${index}" ${node.controlled ? '' : 'disabled'}>Close</button>`;
-        out += `\n    Timestamp: ${node.data.timestamp}`;
+        out += `\n    Age: ${node.data.age}`;
         out += `\n    Screen: ${node.screen ? `${node.screen.label} (${node.screen.width} x ${node.screen.height})` : 'unknown'}`;
 
         out += '\n    ' + Object.entries({
@@ -38,15 +38,8 @@ async function main() {
           'Focused': node.focused,
           'Visible': node.visible
         })
-          // .sort((a, b) => a[0].localeCompare(b[0]))
           .map(([key, value]) => `[${value ? 'x' : ' '}] ${key}`)
           .join('    ');
-
-        // out += ` [state: ${node.data.state}]`;
-        // out += ` [screen: ${node.data.screenId}]`;
-
-        // if (node.controlled) {
-        // }
 
         out += '\n';
 
@@ -91,9 +84,9 @@ async function main() {
     window.getScreenDetails();
   });
 
-  // setInterval(() => {
-  //   manager.self.setData({ timestamp: manager.self.data.timestamp + 1 });
-  // }, 1000);
+  setInterval(() => {
+    manager.self.setData({ age: manager.self.data.age + 1 });
+  }, 1000);
 }
 
 main().catch((err) => {
