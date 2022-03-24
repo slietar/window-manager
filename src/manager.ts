@@ -1,6 +1,6 @@
-import { Node, NodeIdInternalSymbol, SetDataSymbol } from './node.js';
+import { Node } from './node.js';
 import { Message } from './message.js';
-import type { Nodes, NodeId, NodeIdInternal } from './node.js';
+import type { Nodes, NodeId } from './node.js';
 import { Updatable } from './updatable.js';
 
 
@@ -37,16 +37,12 @@ const DefaultExecutor: Executor = (promise: Promise<unknown>) => {
 
 export type ScreenId = number;
 
-export const NodesInternalSymbol = Symbol();
-export const SendSymbol = Symbol();
-
 export class Manager<Data, Info> extends Updatable {
-  #channel: BroadcastChannel;
+  _channel: BroadcastChannel;
   #controlledScreens = false;
-  #nodes: Record<NodeIdInternal, Node<Data, Info>> = {};
+  _nodes: Nodes<Data, Info> = {};
   _screenDetails: ScreenDetails | null = null;
 
-  readonly nodes: Record<NodeId, Node<Data, Info>> = {};
   readonly self: Node<Data, Info>;
 
   constructor(options?: {
@@ -62,64 +58,55 @@ export class Manager<Data, Info> extends Updatable {
       info: options?.info ?? ({} as Info)
     });
 
-    this.#addNode(this.self);
+    this._addNode(this.self);
 
     // this.#idMap[this.self[NodeIdSymbol]] = this.self.id;
 
-    this.#channel = new BroadcastChannel(options?.channelName ?? 'window-control');
+    this._channel = new BroadcastChannel(options?.channelName ?? 'window-control');
   }
 
-  get [NodesInternalSymbol]() {
-    return this.#nodes;
-  }
-
-  get nodeList(): Array<Node<Data, Info>> {
-    return Object.values(this.#nodes);
+  get nodes(): Array<Node<Data, Info>> {
+    return Object.values(this._nodes);
   }
 
   get orphanNodes(): Nodes<Data, Info> {
     return Object.fromEntries(
-      Object.entries(this.#nodes).filter(([_id, node]) => node.parent === null)
+      Object.entries(this._nodes).filter(([_id, node]) => node.parent === null)
     );
   }
 
 
   // Frozen
 
-  #addNode(node: Node<Data, Info>) {
-    this.#nodes[node[NodeIdInternalSymbol]] = node;
-    this.nodes[node.id] = node;
+  private _addNode(node: Node<Data, Info>) {
+    this._nodes[node.id] = node;
   }
 
-  #removeNode(nodeArg: Node<Data, Info> | NodeId) {
+  private _removeNode(nodeArg: Node<Data, Info> | NodeId) {
     let node = typeof nodeArg === 'object'
       ? nodeArg
-      : this.nodes[nodeArg];
+      : this._nodes[nodeArg];
 
-    delete this.#nodes[node[NodeIdInternalSymbol]];
-    delete this.nodes[node.id];
+    delete this._nodes[node.id];
   }
 
   // -
 
 
-  #send(message: Message<Data, Info>) {
-    this.#channel.postMessage(JSON.stringify(message));
-  }
-
-  [SendSymbol](message: Message<Data, Info>) {
-    this.#send(message);
+  _send(message: Message<Data, Info>) {
+    this._channel.postMessage(JSON.stringify(message));
   }
 
 
   async start(options?: { signal?: AbortSignal; }) {
-    this.#channel.addEventListener('message', (event) => {
+    this._channel.addEventListener('message', (event) => {
       let message = JSON.parse(event.data) as Message<Data, Info>;
 
       switch (message.type) {
+        // A new node declares itself.
         case 'declare': {
           let node = Node.fromSerialized(this, message.node);
-          this.#addNode(node);
+          this._addNode(node);
 
           // if (node.parent === this.self) {
           //   let index = this._childrenRefs.findIndex((ref) => ref.__info.id === window.id);
@@ -130,7 +117,7 @@ export class Manager<Data, Info> extends Updatable {
           //   }
           // }
 
-          this.#send({
+          this._send({
             type: 'info',
             node: this.self.serialize()
           });
@@ -140,38 +127,36 @@ export class Manager<Data, Info> extends Updatable {
           break;
         }
 
+        // Other nodes provide information after we declared ourselves.
         case 'info': {
-          if (!(message.node.id in this.#nodes)) {
+          if (!(message.node.id in this._nodes)) {
             let node = Node.fromSerialized(this, message.node);
-            this.#addNode(node);
+            this._addNode(node);
             this._update();
           }
 
           break;
         }
 
+        // A node is closed.
         case 'close': {
-          let node = this.#nodes[message.id];
+          let node = this._nodes[message.id];
+          this._removeNode(node);
 
+          // If this node is our parent
           if (this.self.parent === node) {
             this.self._data.parentId = null;
             this.self._update();
-            this._update();
           }
-
-          this.#removeNode(node);
-
-          // if (this.children.has(closedWindow)) {
-          //   this.children.delete(closedWindow);
-          // }
 
           this._update();
 
           break;
         }
 
+        // A node is ordered to close.
         case 'order-close': {
-          let node = this.#nodes[message.id];
+          let node = this._nodes[message.id];
 
           if (node === this.self) {
             window.close();
@@ -180,8 +165,9 @@ export class Manager<Data, Info> extends Updatable {
           break;
         }
 
+        // A node's data changes.
         case 'update': {
-          let node = this.#nodes[message.id];
+          let node = this._nodes[message.id];
 
           node._data = message.data;
           node._update();
@@ -199,14 +185,13 @@ export class Manager<Data, Info> extends Updatable {
       controller.abort();
     }, { once: true });
 
-    // Notify other clients when this window is closed.
-    window.addEventListener('beforeunload', (event) => {
-      // unloading = true;
+    // Notify other clients when this node is closed.
+    window.addEventListener('beforeunload', () => {
       controller.abort();
 
-      this.#send({
+      this._send({
         type: 'close',
-        id: this.self[NodeIdInternalSymbol]
+        id: this.self.id
       });
     }, { signal: controller.signal });
 
@@ -215,9 +200,6 @@ export class Manager<Data, Info> extends Updatable {
     document.addEventListener('visibilitychange', () => {
       this.self._data.visible = (document.visibilityState === 'visible');
       this.self._updateAndBroadcast();
-
-      // if (!unloading) {
-      // }
     }, { signal: controller.signal });
 
 
@@ -234,7 +216,7 @@ export class Manager<Data, Info> extends Updatable {
 
 
     // Notify existing nodes of this new node.
-    this.#send({
+    this._send({
       type: 'declare',
       node: this.self.serialize()
     });

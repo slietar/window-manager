@@ -1,11 +1,9 @@
-import { NodesInternalSymbol, SendSymbol } from './manager.js';
 import type { Manager, ScreenId } from './manager.js';
 import type { SerializedNode } from './message.js';
 import { Updatable } from './updatable.js';
 
 
-export type NodeId = symbol;
-export type NodeIdInternal = string;
+export type NodeId = string;
 export type Nodes<Data, Info> = Record<NodeId, Node<Data, Info>>;
 
 export const NodeIdInternalSymbol = Symbol();
@@ -14,12 +12,11 @@ export const SetDataSymbol = Symbol();
 
 // export class Node<Info extends Object = {}, Data extends object = {}> {
 export class Node<Data, Info> extends Updatable {
-  #id: NodeIdInternal;
-  #manager: Manager<Data, Info>;
+  _manager: Manager<Data, Info>;
 
   // data: changes
   _data: {
-    parentId: NodeIdInternal | null;
+    parentId: NodeId | null;
     screenId: ScreenId | null;
 
     focused: boolean;
@@ -29,7 +26,7 @@ export class Node<Data, Info> extends Updatable {
   };
 
   // info: doesn't change
-  #info: {
+  _info: {
     controlled: boolean;
     popup: boolean;
     user: Info;
@@ -39,9 +36,9 @@ export class Node<Data, Info> extends Updatable {
   readonly window: Window | null;
 
   private constructor(manager: Manager<Data, Info>, options: {
-    id: NodeIdInternal;
+    id: NodeId;
     data: {
-      parentId: NodeIdInternal | null;
+      parentId: NodeId | null;
       screenId: ScreenId | null;
 
       focused: boolean;
@@ -59,39 +56,36 @@ export class Node<Data, Info> extends Updatable {
     super();
 
     this._data = options.data;
-    this.#id = options.id;
-    this.#info = options.info;
-    this.#manager = manager;
+    this._info = options.info;
+    this._manager = manager;
 
-    this.id = Symbol(this.#id);
+    this.id = options.id;
     this.window = options.window;
   }
 
-  get stringId(): string { return this.#id; }
-
   get data(): Data { return this._data.user; }
-  get controlled(): boolean { return this.#info.controlled; }
-  get popup(): boolean { return this.#info.popup };
+  get controlled(): boolean { return this._info.controlled; }
+  get popup(): boolean { return this._info.popup };
 
-  get info(): Info { return this.#info.user; }
+  get info(): Info { return this._info.user; }
   get focused(): boolean { return this._data.focused; }
   get visible(): boolean { return this._data.visible; }
 
   get screen(): ScreenDetailed | null {
-    return this.#manager._screenDetails && this._data.screenId !== null
-      ? this.#manager._screenDetails.screens[this._data.screenId]
+    return this._manager._screenDetails && this._data.screenId !== null
+      ? this._manager._screenDetails.screens[this._data.screenId]
       : null;
   }
 
   get parent(): Node<Data, Info> | null {
     return this._data.parentId
-      ? this.#manager[NodesInternalSymbol][this._data.parentId]
+      ? this._manager._nodes[this._data.parentId]
       : null;
   }
 
   get children(): Record<NodeId, Node<Data, Info>> {
     return Object.fromEntries(
-      Object.entries(this.#manager[NodesInternalSymbol]).filter(([_id, node]) =>
+      Object.entries(this._manager.nodes).filter(([_id, node]) =>
         node.parent === this
       )
     );
@@ -102,9 +96,9 @@ export class Node<Data, Info> extends Updatable {
     if (this.window) {
       this.window.close();
     } else {
-      this.#manager[SendSymbol]({
+      this._manager._send({
         type: 'order-close',
-        id: this.#id
+        id: this.id
       });
     }
   }
@@ -116,17 +110,17 @@ export class Node<Data, Info> extends Updatable {
 
   serialize(): SerializedNode<Data, Info> {
     return {
-      id: this.#id,
+      id: this.id,
       data: this._data,
-      info: this.#info
+      info: this._info
     };
   }
 
 
   _broadcast() {
-    this.#manager[SendSymbol]({
+    this._manager._send({
       type: 'update',
-      id: this.#id,
+      id: this.id,
       data: this._data
     });
   }
@@ -134,11 +128,7 @@ export class Node<Data, Info> extends Updatable {
   _updateAndBroadcast() {
     this._update();
     this._broadcast();
-    this.#manager._update();
-  }
-
-  get [NodeIdInternalSymbol](): NodeIdInternal {
-    return this.#id;
+    this._manager._update();
   }
 
 
@@ -181,6 +171,6 @@ export class Node<Data, Info> extends Updatable {
   }
 }
 
-function createId(): NodeIdInternal {
+function createId(): NodeId {
   return (Math.random() + 1).toString(36).substring(7);
 }

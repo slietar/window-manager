@@ -1,5 +1,5 @@
 import type { ScreenId } from './manager.js';
-import type { NodeIdInternal } from './node.js';
+import type { NodeId } from './node.js';
 
 
 export type Message<Data, Info> = {
@@ -10,25 +10,25 @@ export type Message<Data, Info> = {
   node: SerializedNode<Data, Info>;
 } | {
   type: 'close';
-  id: NodeIdInternal;
+  id: NodeId;
 } | {
   type: 'update';
-  id: NodeIdInternal;
+  id: NodeId;
   data: SerializedNode<Data, never>['data'];
 } | {
   type: 'order-close';
-  id: NodeIdInternal;
+  id: NodeId;
 } | {
   type: 'run';
-  id: NodeIdInternal;
+  id: NodeId;
   name: string;
   args: unknown[];
 };
 
 export interface SerializedNode<Data, Info> {
-  id: NodeIdInternal;
+  id: NodeId;
   data: {
-    parentId: NodeIdInternal | null;
+    parentId: NodeId | null;
     screenId: ScreenId | null;
 
     focused: boolean;
