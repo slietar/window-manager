@@ -252,9 +252,39 @@ export class Manager<Data, Info, Methods extends MethodsBase> extends Updatable 
     await this.controlScreens();
   }
 
-  open(options?: { popup: boolean; }) {
-    let ref = window.open(location.href, '', options?.popup ? 'popup' : '');
-    // this._childrenRefs.push(ref);
+  open(options: {
+    x?: number;
+    y?: number;
+
+    popup?: boolean;
+    screen?: Screen;
+
+    width?: number;
+    height?: number;
+  } = {}) {
+    let features = [];
+
+    if (options.x || options.screen) {
+      features.push(`left=${(options.screen?.left ?? 0) + (options.x ?? 0)}`);
+    }
+
+    if (options.y || options.screen) {
+      features.push(`top=${(options.screen?.top ?? 0) + (options.y ?? 0)}`);
+    }
+
+    if (options.width) {
+      features.push(`width=${options.width}`);
+    }
+
+    if (options.height) {
+      features.push(`height=${options.height}`);
+    }
+
+    if (options.popup) {
+      features.push(`popup`);
+    }
+
+    let _ref = window.open(location.href, 'Xxx', features.join(','));
   }
 
 
