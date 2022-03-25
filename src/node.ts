@@ -1,4 +1,4 @@
-import type { Manager, MethodsBase, ScreenId } from './manager.js';
+import type { Manager, MethodsBase, Screen, ScreenId } from './manager.js';
 import type { SerializedNode } from './message.js';
 import { Updatable } from './updatable.js';
 
@@ -83,7 +83,7 @@ export class Node<Data, Info, Methods extends MethodsBase> extends Updatable {
   get fullscreen(): boolean { return this._data.fullscreen; }
   get visible(): boolean { return this._data.visible; }
 
-  get screen(): ScreenDetailed | null {
+  get screen(): Screen | null {
     return this._manager.screensById && this._data.screenId !== null
       ? this._manager.screensById[this._data.screenId]
       : null;

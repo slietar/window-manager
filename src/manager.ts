@@ -14,6 +14,7 @@ const DefaultExecutor: Executor = (promise: Promise<unknown>) => {
   });
 }
 
+
 export type ScreenId = string;
 
 export interface Screen extends ScreenDetailed {
@@ -264,27 +265,27 @@ export class Manager<Data, Info, Methods extends MethodsBase> extends Updatable 
   } = {}) {
     let features = [];
 
-    if (options.x || options.screen) {
+    if (options.screen || options.x) {
       features.push(`left=${(options.screen?.left ?? 0) + (options.x ?? 0)}`);
     }
 
-    if (options.y || options.screen) {
+    if (options.screen || options.y) {
       features.push(`top=${(options.screen?.top ?? 0) + (options.y ?? 0)}`);
     }
 
-    if (options.width) {
-      features.push(`width=${options.width}`);
+    if (options.screen || options.width) {
+      features.push(`width=${options.width ?? Math.min(options.screen!.width, 1440)}`);
     }
 
-    if (options.height) {
-      features.push(`height=${options.height}`);
+    if (options.screen || options.height) {
+      features.push(`height=${options.height ?? Math.min(options.screen!.height, 900)}`);
     }
 
     if (options.popup) {
       features.push(`popup`);
     }
 
-    let _ref = window.open(location.href, 'Xxx', features.join(','));
+    let _ref = window.open(location.href, '', features.join(','));
   }
 
 
