@@ -17,7 +17,12 @@ declare global {
   interface ScreenDetailed extends Screen {
     devicePixelRatio: number;
     label: string;
+
     left: number;
     top: number;
+
+    isExtended: boolean;
+    isInternal: boolean;
+    isPrimary: boolean;
   }
 }

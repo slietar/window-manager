@@ -14,6 +14,13 @@ const DefaultExecutor: Executor = (promise: Promise<unknown>) => {
   });
 }
 
+export type ScreenId = string;
+
+export interface Screen extends ScreenDetailed {
+  id: ScreenId;
+  isCurrent: boolean;
+}
+
 
 export interface MethodsBuiltin {
   _focus(): void;
@@ -23,13 +30,14 @@ export interface MethodsBuiltin {
 }
 
 export type MethodsBase = Record<string, (...args: any[]) => void>;
-export type ScreenId = number;
 
 export class Manager<Data, Info, Methods extends MethodsBase> extends Updatable {
   _channel: BroadcastChannel;
   _methods: Methods & MethodsBuiltin;
   _nodes: Nodes<Data, Info, Methods> = {};
+
   screenDetails: ScreenDetails | null = null;
+  screensById: Record<Screen['id'], Screen> | null = null;
 
   readonly self: Node<Data, Info, Methods>;
 
@@ -80,6 +88,10 @@ export class Manager<Data, Info, Methods extends MethodsBase> extends Updatable 
     return Object.fromEntries(
       Object.entries(this._nodes).filter(([_id, node]) => node.parent === null)
     );
+  }
+
+  get screens(): Array<Screen> | null {
+    return this.screensById && Object.values(this.screensById);
   }
 
 
@@ -257,18 +269,53 @@ export class Manager<Data, Info, Methods extends MethodsBase> extends Updatable 
     }
 
 
+    let updateScreens = () => {
+      let screenDetails = this.screenDetails!;
+
+      this.screensById = Object.fromEntries(
+        screenDetails.screens.map((screenDetailed) => {
+          let id = hash([screenDetailed.width, screenDetailed.height, screenDetailed.isInternal, screenDetailed.colorDepth, screenDetailed.devicePixelRatio]);
+
+          return [id, {
+            id,
+            label: screenDetailed.label,
+
+            availWidth: screenDetailed.availWidth,
+            availHeight: screenDetailed.availHeight,
+            width: screenDetailed.width,
+            height: screenDetailed.height,
+
+            left: screenDetailed.left,
+            top: screenDetailed.top,
+
+            colorDepth: screenDetailed.colorDepth,
+            devicePixelRatio: screenDetailed.devicePixelRatio,
+            orientation: screenDetailed.orientation,
+            pixelDepth: screenDetailed.pixelDepth,
+
+            get isCurrent() {
+              return screenDetailed === screenDetails.currentScreen;
+            },
+            isExtended: screenDetailed.isExtended,
+            isInternal: screenDetailed.isInternal,
+            isPrimary: screenDetailed.isPrimary
+          }];
+        })
+      );
+    };
+
     let updateCurrentScreen = () => {
-      this.self._data.screenId = this.screenDetails
-        && this.screenDetails.screens.indexOf(this.screenDetails.currentScreen);
+      this.self._data.screenId = this.screens?.find((screen) => screen.isCurrent)?.id ?? null;
       this.self._updateAndBroadcast();
     };
 
-    let update = async () => {
+    let updatePermission = async () => {
       if (permission.state === 'granted') {
         if (!this.screenDetails) {
           this.screenDetails = await window.getScreenDetails();
 
           this.screenDetails.addEventListener('screenschange', () => {
+            updateScreens();
             updateCurrentScreen();
           });
 
@@ -276,18 +323,33 @@ export class Manager<Data, Info, Methods extends MethodsBase> extends Updatable 
             updateCurrentScreen();
           });
 
+          updateScreens();
           updateCurrentScreen();
         }
       } else {
         this.screenDetails = null;
+        this.screensById = null;
+
         updateCurrentScreen();
       }
     };
 
-    await update();
+    await updatePermission();
 
     permission.addEventListener('change', () => {
-      (options?.executor ?? DefaultExecutor)(update());
+      (options?.executor ?? DefaultExecutor)(updatePermission());
     }, { signal: options?.signal });
   }
+}
+
+
+function hash(input: (boolean | number)[]): string {
+  let output = 0;
+
+  for (let item of input) {
+    output = ((output << 5) - output) + Number(item);
+    output = output & output;
+  }
+
+  return Math.abs(output).toString(16);
 }

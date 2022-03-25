@@ -84,8 +84,8 @@ export class Node<Data, Info, Methods extends MethodsBase> extends Updatable {
   get visible(): boolean { return this._data.visible; }
 
   get screen(): ScreenDetailed | null {
-    return this._manager.screenDetails && this._data.screenId !== null
-      ? this._manager.screenDetails.screens[this._data.screenId]
+    return this._manager.screensById && this._data.screenId !== null
+      ? this._manager.screensById[this._data.screenId]
       : null;
   }
 

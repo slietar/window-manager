@@ -23,7 +23,7 @@ async function main() {
         // out += `\n    Age: ${node.data.age}`;
 
         if (node.screen) {
-          out += `\n    Screen: <select data-id="${node.id}" ${node.controlled && node.popup ? '' : 'disabled'}>${manager.screenDetails.screens.map((screen, screenIndex) => `<option ${screen === node.screen ? 'selected' : ''} value="${screenIndex}">${screen.label} (${screen.width} x ${screen.height})</option>`).join('')}</select>`;
+          out += `\n    Screen: <select data-id="${node.id}" ${node.controlled && node.popup ? '' : 'disabled'}>${manager.screens.map((screen) => `<option ${screen === node.screen ? 'selected' : ''} value="${screen.id}">${screen.label} &ndash; ${screen.id.toUpperCase()} (${screen.width} x ${screen.height})</option>`).join('')}</select>`;
         }
 
         out += '\n    ' + Object.entries({
@@ -68,7 +68,7 @@ async function main() {
     for (let el of document.querySelectorAll('select[data-id]')) {
       el.addEventListener('change', () => {
         let node = manager.nodesById[el.dataset.id];
-        let screen = manager.screenDetails.screens[el.value];
+        let screen = manager.screensById[el.value];
 
         node.moveToScreen(screen, 0, 0);
       }, { signal: controller.signal });
